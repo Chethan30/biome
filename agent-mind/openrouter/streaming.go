@@ -29,12 +29,15 @@ func parseStreamingJson(s string) map[string]interface{} {
 	return out
 }
 
+const ansiYellow = "\033[33m"
+const ansiReset = "\033[0m"
+
 // Stream creates a streaming request to OpenRouter
 func (c *Client) Stream(ctx context.Context, req provider.CompletionRequest, model string) (<-chan provider.StreamEvent, error) {
 	convertedTools := convertTools(req.Tools)
-	fmt.Printf("[OPENROUTER] Stream tools: %d – ", len(convertedTools))
+	fmt.Printf("%s[OPENROUTER] Stream tools: %d – ", ansiYellow, len(convertedTools))
 	if len(convertedTools) == 0 {
-		fmt.Println("(none)")
+		fmt.Println("(none)" + ansiReset)
 	} else {
 		for i, t := range convertedTools {
 			if i > 0 {
@@ -42,7 +45,7 @@ func (c *Client) Stream(ctx context.Context, req provider.CompletionRequest, mod
 			}
 			fmt.Print(t.Function.Name)
 		}
-		fmt.Println()
+		fmt.Println(ansiReset)
 	}
 	// Build OpenRouter request
 	chatReq := chatRequest{
@@ -176,7 +179,7 @@ func (c *Client) parseSSE(ctx context.Context, body io.ReadCloser, events chan<-
 
 			// Tool call deltas: accumulate by index and emit incremental payloads (streaming tool-call parsing)
 			if len(delta.ToolCalls) > 0 {
-				fmt.Printf("[OPENROUTER] Tool call delta: %d chunk(s)\n", len(delta.ToolCalls))
+				fmt.Printf("%s[OPENROUTER] Tool call delta: %d chunk(s)\n%s", ansiYellow, len(delta.ToolCalls), ansiReset)
 			}
 			for _, tc := range delta.ToolCalls {
 				if tc.Index < 0 {
@@ -233,15 +236,15 @@ func (c *Client) Complete(ctx context.Context, req provider.CompletionRequest, m
 		ParallelToolCalls: len(convertedTools) > 0,
 	}
 	// Verify tools sent to OpenRouter
-	fmt.Printf("[OPENROUTER] Tools in request: %d – ", len(convertedTools))
+	fmt.Printf("%s[OPENROUTER] Tools in request: %d – ", ansiYellow, len(convertedTools))
 	if len(convertedTools) == 0 {
-		fmt.Println("(none)")
+		fmt.Println("(none)" + ansiReset)
 	} else {
 		names := make([]string, len(convertedTools))
 		for i, t := range convertedTools {
 			names[i] = t.Function.Name
 		}
-		fmt.Println(names)
+		fmt.Println(names, ansiReset)
 	}
 
 	// Add system prompt

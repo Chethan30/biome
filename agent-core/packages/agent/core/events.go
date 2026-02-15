@@ -3,13 +3,16 @@ package core
 import "github.com/biome/agent-core/packages/agent/types"
 
 const (
-	EventTurnStart    = "turn_start"
-	EventTextDelta    = "text_delta"
-	EventThinking     = "thinking"
-	EventSteeringMode = "steering_mode"
-	EventToolCall     = "tool_call"
-	EventToolResult   = "tool_result"
-	EventTurnEnd      = "turn_end"
+	EventTurnStart     = "turn_start"
+	EventTextDelta     = "text_delta"
+	EventThinking      = "thinking"
+	EventSteeringMode  = "steering_mode"
+	EventToolCall      = "tool_call"
+	EventToolResult    = "tool_result"
+	EventTurnEnd       = "turn_end"
+	EventPlanCreated   = "plan_created"
+	EventPlanStepStart = "plan_step_start"
+	EventPlanStepEnd   = "plan_step_end"
 )
 
 type AgentEvent struct {
@@ -52,4 +55,33 @@ type SteeringModePayload struct {
 type TurnEndPayload struct {
 	Message		types.AssistantMessage
 	Duration 	int64
+}
+
+// PlanCreatedPayload is emitted when the plan-and-execute orchestrator has produced a plan.
+type PlanCreatedPayload struct {
+	StepCount	int
+	Steps		[]PlanStepInfo
+}
+
+// PlanStepInfo describes one step in a plan (for UI/observability).
+type PlanStepInfo struct {
+	Tool	string
+	Args	map[string]interface{}
+}
+
+// PlanStepStartPayload is emitted when a plan step execution starts.
+type PlanStepStartPayload struct {
+	Index     int
+	StepCount int
+	Tool      string
+	Args      map[string]interface{}
+}
+
+// PlanStepEndPayload is emitted when a plan step execution finishes.
+type PlanStepEndPayload struct {
+	Index     int
+	StepCount int
+	Tool      string
+	Result    interface{}
+	Error     string
 }
