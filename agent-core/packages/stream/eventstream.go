@@ -18,6 +18,9 @@ func NewEventStream[T, R any]() *EventStream[T, R] {
 }
 
 func (es *EventStream[T, R]) Push(event T) {
+	if es.closed {
+		return
+	}
 	select {
 	case es.events <- event:
 	case <-es.doneChan:
