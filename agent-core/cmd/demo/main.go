@@ -30,8 +30,7 @@ func main() {
 	llmModel := "qwen/qwen3-235b-a22b-2507"
 
 	// Setup provider
-	// apiKey := os.Getenv("OPENROUTER_API_KEY")
-	apiKey := "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"
+	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
 		fmt.Println("Set OPENROUTER_API_KEY to run with a real LLM")
 		return
