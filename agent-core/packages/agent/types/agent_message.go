@@ -19,6 +19,9 @@ func ConvertToLLM(messages []AgentMessage) []Message {
 			llmMessages = append(llmMessages, m)
 		case ToolResultMessage:
 			llmMessages = append(llmMessages, m)
+		case ControlMessage:
+			// Treat control as user turn so the LLM sees the follow-up and the agent keeps going.
+			llmMessages = append(llmMessages, UserMessage{Content: m.Content})
 		default:
 			// skip
 		}
