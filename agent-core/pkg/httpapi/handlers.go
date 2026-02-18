@@ -9,6 +9,7 @@ import (
 
 	"github.com/biome/agent-core/packages/agent/core"
 	"github.com/biome/agent-core/packages/agent/tools"
+	"github.com/biome/agent-core/packages/agent/tools/delegate"
 	"github.com/biome/agent-core/packages/agent/transform"
 	"github.com/biome/agent-core/packages/agent/types"
 	"github.com/biome/agent-core/packages/stream"
@@ -152,6 +153,7 @@ func (s *Server) PromptHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid tool config: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	toolRegistry = s.addDelegateTool(toolRegistry)
 
 	// Build agent config
 	agentConfig := s.buildAgentConfig(req, toolRegistry)
@@ -175,6 +177,19 @@ func (s *Server) PromptHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.collectEvents(w, eventStream)
 	}
+}
+
+// addDelegateTool returns a new registry that includes all tools from pool plus the delegate tool.
+// Sub-agents created via delegate get only the pool tools (never the delegate itself).
+func (s *Server) addDelegateTool(pool *tools.ToolRegistry) *tools.ToolRegistry {
+	pipeline := transform.NewPipeline(nil, transform.DefaultConvertToLLM)
+	delegateTool := delegate.New(s.defaultProvider, pipeline, pool)
+	r := tools.NewToolRegistry()
+	for _, t := range pool.All() {
+		r.Register(t)
+	}
+	r.Register(delegateTool)
+	return r
 }
 
 // buildAgentConfig creates agent configuration from request and the registry built from tool configs.

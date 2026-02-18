@@ -68,6 +68,14 @@ type ToolResultMessage struct {
 	timestamp int64
 }
 
+// ControlMessage is a system-driven follow-up message (e.g. after a batch of tool calls).
+// Used by the orchestrator or GetFollowUpMessages to keep the agent going. ConvertToLLM
+// converts it to a UserMessage so the LLM sees it as the latest user turn.
+type ControlMessage struct {
+	Content   []ContentBlock
+	timestamp int64
+}
+
 // Impls
 func (u UserMessage) Role() string { return "user" }
 func (u UserMessage) Timestamp() int64 { return u.timestamp }
@@ -80,3 +88,6 @@ func (tc ToolCallMessage) Timestamp() int64 { return tc.timestamp }
 
 func (tr ToolResultMessage) Role() string { return "toolResult" }
 func (tr ToolResultMessage) Timestamp() int64 { return tr.timestamp }
+
+func (c ControlMessage) Role() string { return "control" }
+func (c ControlMessage) Timestamp() int64 { return c.timestamp }

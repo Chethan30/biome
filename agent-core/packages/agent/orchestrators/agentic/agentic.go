@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/biome/agent-core/packages/agent/core"
@@ -106,87 +107,71 @@ func (o *AgenticOrchestrator) Run(ctx context.Context, agent *core.Agent, userMe
 			}
 			state.Messages = append(state.Messages, assistantWithToolCalls)
 
-			queue := core.NewFollowUpQueue()
-			for _, tc := range decision.ToolCalls {
-				queue.Enqueue(core.FollowUpItem{Type: "tool_call", Payload: tc})
+			calls := decision.ToolCalls
+			for _, tc := range calls {
 				state.PendingToolCalls[tc.ToolCallId] = true
 			}
 
-			var steeringInterrupt []types.AgentMessage
-			for !queue.IsEmpty() {
-				item, _ := queue.Dequeue()
-				if item.Type != "tool_call" {
-					continue
-				}
-				toolCall := item.Payload.(core.ToolCallRequest)
+			// Run all tool calls in parallel; collect results in invocation order.
+			results := make([]types.ToolResultMessage, len(calls))
+			var wg sync.WaitGroup
+			for i := range calls {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					results[i] = agent.ExecuteTool(ctx, calls[i])
+				}(i)
+			}
+			wg.Wait()
 
+			// Emit events and append results in order.
+			for _, tc := range calls {
 				eventStream.Push(core.AgentEvent{
 					Type: core.EventToolCall,
 					Payload: core.ToolCallPayload{
-						ToolCallId: toolCall.ToolCallId,
-						ToolName:   toolCall.ToolName,
-						Args:       toolCall.Args,
+						ToolCallId: tc.ToolCallId,
+						ToolName:   tc.ToolName,
+						Args:       tc.Args,
 					},
 				})
-
-				toolResult := agent.ExecuteTool(ctx, toolCall)
-
+			}
+			for i, tc := range calls {
+				res := results[i]
 				eventStream.Push(core.AgentEvent{
 					Type: core.EventToolResult,
 					Payload: core.ToolResultPayload{
-						ToolCallId: toolCall.ToolCallId,
-						ToolName:   toolCall.ToolName,
-						Result:     toolResult.Details,
-						Error:      core.ToolResultError(toolResult),
+						ToolCallId: tc.ToolCallId,
+						ToolName:   tc.ToolName,
+						Result:     res.Details,
+						Error:      core.ToolResultError(res),
 					},
 				})
+				delete(state.PendingToolCalls, tc.ToolCallId)
+				state.Messages = append(state.Messages, res)
+			}
 
-				delete(state.PendingToolCalls, toolCall.ToolCallId)
-				state.Messages = append(state.Messages, toolResult)
-
-				if config.GetSteeringMessages != nil {
-					if steering := config.GetSteeringMessages(); len(steering) > 0 {
-						steeringInterrupt = steering
-						break
+			if config.GetSteeringMessages != nil {
+				if steering := config.GetSteeringMessages(); len(steering) > 0 {
+					for _, m := range steering {
+						state.Messages = append(state.Messages, m)
 					}
 				}
 			}
 
-			if len(steeringInterrupt) > 0 {
-				for _, remaining := range queue.Drain() {
-					if remaining.Type != "tool_call" {
-						continue
-					}
-					tc := remaining.Payload.(core.ToolCallRequest)
-					skipResult := types.ToolResultMessage{
-						Content:    []types.ContentBlock{types.TextContent{Text: "skipped (steering interrupt)"}},
-						ToolCallID: tc.ToolCallId,
-						ToolName:   tc.ToolName,
-						IsError:    true,
-					}
-					eventStream.Push(core.AgentEvent{
-						Type: core.EventToolCall,
-						Payload: core.ToolCallPayload{
-							ToolCallId: tc.ToolCallId,
-							ToolName:   tc.ToolName,
-							Args:       tc.Args,
-						},
-					})
-					eventStream.Push(core.AgentEvent{
-						Type: core.EventToolResult,
-						Payload: core.ToolResultPayload{
-							ToolCallId: tc.ToolCallId,
-							ToolName:   tc.ToolName,
-							Error:      "skipped (steering interrupt)",
-						},
-					})
-					delete(state.PendingToolCalls, tc.ToolCallId)
-					state.Messages = append(state.Messages, skipResult)
-				}
-				for _, m := range steeringInterrupt {
-					state.Messages = append(state.Messages, m)
+			// Delegation summary and control message to keep the agent going.
+			var summaryLines []string
+			for _, tc := range calls {
+				if tc.ToolName == "delegate" {
+					summaryLines = append(summaryLines, fmt.Sprintf("Task delegated via tool_call_id %s.", tc.ToolCallId))
 				}
 			}
+			controlText := "All requested tool calls have completed. What would you like to do next?"
+			if len(summaryLines) > 0 {
+				controlText = strings.Join(summaryLines, " ") + " " + controlText
+			}
+			state.Messages = append(state.Messages, types.ControlMessage{
+				Content: []types.ContentBlock{types.TextContent{Text: controlText}},
+			})
 
 			decision, err = agent.SteeringDecision(ctx, true)
 			if err != nil {
