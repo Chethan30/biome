@@ -24,8 +24,8 @@ Biome is a Go monorepo for building LLM-driven agents with tool use, streaming e
 
 Orchestrators live under `agent-core/packages/agent/orchestrators/` and define how each turn runs (when to call the LLM, when to run tools, what events to emit).
 
-- **[agentic](agent-core/packages/agent/orchestrators/agentic/README.md)** – Default. LLM decides per turn: respond (text) or steer (tool calls). Tools run one-by-one; steering and follow-up hooks available. Event pattern documented with diagrams.
-- **[planexecute](agent-core/packages/agent/orchestrators/planexecute/README.md)** – Plan first (one LLM call → JSON plan), execute steps (run tools in order), then synthesize (one LLM call → final answer). Event pattern documented with diagrams.
+- **[agentic](agent-core/packages/agent/orchestrators/agentic/README.md)** – Default. LLM decides per turn: respond (text) or steer (tool calls). **Tools run in parallel** when the LLM requests multiple tool calls; results are collected in order and the main agent sees them (including delegation traces and errors), so it can **rectify tool or delegation failures and retry with intent**. Steering and follow-up hooks available. Event pattern documented with diagrams.
+- **[planexecute](agent-core/packages/agent/orchestrators/planexecute/README.md)** – Plan first (one LLM call → JSON plan), execute steps (run tools in order), then synthesize (one LLM call → final answer). The main agent can **rectify tool or delegation failures** and retry (e.g. after seeing error/thinking in tool results). Event pattern documented with diagrams.
 
 ## Building and running
 

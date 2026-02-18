@@ -1,6 +1,6 @@
 # Plan-and-execute orchestrator
 
-Turn loop in three phases: **plan** (one LLM call → structured JSON plan of tool steps), **execute** (run each step via the tool registry), **synthesize** (one LLM call → final natural-language answer). No steering loop; the plan is fixed after the first LLM response (empty or invalid plan falls back to synthesis only).
+Turn loop in three phases: **plan** (one LLM call → structured JSON plan of tool steps), **execute** (run each step via the tool registry), **synthesize** (one LLM call → final natural-language answer). No steering loop; the plan is fixed after the first LLM response (empty or invalid plan falls back to synthesis only). The main agent can still **rectify tool or delegation failures** when it sees errors or traces in tool results (e.g. during synthesis or in follow-up), and retry with intent.
 
 ## Event pattern
 

@@ -1,6 +1,6 @@
 # Agentic orchestrator
 
-Default turn loop: the LLM makes a **steering decision** each time (respond with text or steer with tool calls). When it steers, tool calls are enqueued and executed one-by-one; after each tool result the LLM is called again until it responds with text. Optional **steering** (interrupt and inject messages) and **follow-up** (continue the turn with extra messages) are supported.
+Default turn loop: the LLM makes a **steering decision** each time (respond with text or steer with tool calls). When it steers, **tool calls run in parallel**; results are collected in order and appended to the conversation. The main agent then sees all tool results (including delegation traces and errors) and is called again—so it can **rectify tool or delegation failures and retry with intent** (e.g. call another tool directly after a sub-agent error). After the batch, an optional control message can summarize tool outcomes before the next decision. Optional **steering** (interrupt and inject messages) and **follow-up** (continue the turn with extra messages) are supported.
 
 ## Event pattern
 
@@ -28,7 +28,7 @@ sequenceDiagram
       opt thinking
         Agentic->>Stream: Push(thinking)
       end
-      loop For each tool call
+      loop For each tool call (batch runs in parallel; results in order)
         Agentic->>Stream: Push(tool_call)
         Agentic->>Tool: ExecuteTool(ctx, toolCall)
         Tool-->>Agentic: ToolResultMessage
@@ -37,7 +37,7 @@ sequenceDiagram
           Note over Agentic: Drain queue, inject messages, break
         end
       end
-      Agentic->>LLM: SteeringDecision again
+      Agentic->>LLM: SteeringDecision again (sees all results; can retry on failure)
     else respond
       Agentic->>Stream: Push(text_delta)... then Push(turn_end)
     end
@@ -101,6 +101,18 @@ steering_mode { mode: "respond" }
 text_delta "15*3 = 45 and 10+5 = 15"
 turn_end
 ```
+
+### Recovery and retry (e.g. delegate failure)
+
+When a tool returns an error (e.g. a delegation sub-agent fails), the main agent sees the error and optional thinking trace in the tool result. It can then decide to retry with a different approach. Example from the delegate demo:
+
+1. User asks to delegate “What time is it?” to a sub-agent with `get_current_time`.
+2. Sub-agent runs but produces no final text (e.g. only `turn_start` in the trace).
+3. Delegate tool returns `error: sub-agent produced no assistant text response` plus `thinking: turn_start`.
+4. Main agent receives this, reasons (“I couldn’t retrieve the current time through the sub-agent. Let me try directly”), and calls `get_current_time` itself.
+5. Tool returns the time; main agent then responds with the final answer.
+
+So the main agent rectifies the delegation failure and retries with intent instead of surfacing the raw error to the user.
 
 ## Usage
 
